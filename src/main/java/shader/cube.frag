@@ -1,26 +1,18 @@
-#version 460 core
-
+#version 410 core
 in vec3 FragPos;
 in vec3 Normal;
+in vec2 TexCoord;
 
 out vec4 FragColor;
 
-uniform vec3 u_LightDir;    // normalized light direction
-uniform vec3 u_LightColor;  // e.g., vec3(1.0, 1.0, 1.0)
-uniform vec3 u_ObjectColor; // e.g., vec3(1.0, 0.5, 0.31)
+uniform sampler2D u_Texture;
+uniform vec3 u_LightDir;
+uniform vec3 u_LightColor;
 
 void main() {
     vec3 norm = normalize(Normal);
-
-    // --- Diffuse shading ---
     float diff = max(dot(norm, -u_LightDir), 0.0);
-    vec3 diffuse = diff * u_LightColor;
-
-    // --- Ambient shading ---
-    vec3 ambient = 0.2 * u_ObjectColor; // 20% ambient brightness
-
-    // --- Combine ambient + diffuse ---
-    vec3 result = (ambient + diffuse) * u_ObjectColor;
-
+    vec3 texColor = texture(u_Texture, TexCoord).rgb;
+    vec3 result = texColor * u_LightColor * diff;
     FragColor = vec4(result, 1.0);
 }

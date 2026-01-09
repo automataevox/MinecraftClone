@@ -8,54 +8,56 @@ public class CubeMesh {
 
     private final int vao, vbo;
 
+    //TODO: Fix Mesh Texture
+
     private static final float[] VERTICES = {
-            // Front face (normal 0,0,1)
-            -0.5f, -0.5f,  0.5f,  0f, 0f, 1f,
-            0.5f, -0.5f,  0.5f,  0f, 0f, 1f,
-            0.5f,  0.5f,  0.5f,  0f, 0f, 1f,
-            0.5f,  0.5f,  0.5f,  0f, 0f, 1f,
-            -0.5f,  0.5f,  0.5f,  0f, 0f, 1f,
-            -0.5f, -0.5f,  0.5f,  0f, 0f, 1f,
+            // Front face
+            -0.5f, -0.5f,  0.5f,  0f, 0f, 1f,  0f, 0f,
+            0.5f, -0.5f,  0.5f,  0f, 0f, 1f,  1f, 0f,
+            0.5f,  0.5f,  0.5f,  0f, 0f, 1f,  1f, 1f,
+            0.5f,  0.5f,  0.5f,  0f, 0f, 1f,  1f, 1f,
+            -0.5f,  0.5f,  0.5f,  0f, 0f, 1f,  0f, 1f,
+            -0.5f, -0.5f,  0.5f,  0f, 0f, 1f,  0f, 0f,
 
-            // Back face (normal 0,0,-1)
-            -0.5f, -0.5f, -0.5f,  0f, 0f, -1f,
-            -0.5f,  0.5f, -0.5f,  0f, 0f, -1f,
-            0.5f,  0.5f, -0.5f,  0f, 0f, -1f,
-            0.5f,  0.5f, -0.5f,  0f, 0f, -1f,
-            0.5f, -0.5f, -0.5f,  0f, 0f, -1f,
-            -0.5f, -0.5f, -0.5f,  0f, 0f, -1f,
+            // Back face
+            -0.5f, -0.5f, -0.5f,  0f, 0f, -1f,  1f, 0f,
+            0.5f, -0.5f, -0.5f,  0f, 0f, -1f,  0f, 0f,
+            0.5f,  0.5f, -0.5f,  0f, 0f, -1f,  0f, 1f,
+            0.5f,  0.5f, -0.5f,  0f, 0f, -1f,  0f, 1f,
+            -0.5f,  0.5f, -0.5f,  0f, 0f, -1f,  1f, 1f,
+            -0.5f, -0.5f, -0.5f,  0f, 0f, -1f,  1f, 0f,
 
-            // Left face (normal -1,0,0)
-            -0.5f,  0.5f,  0.5f,  -1f,0f,0f,
-            -0.5f,  0.5f, -0.5f,  -1f,0f,0f,
-            -0.5f, -0.5f, -0.5f,  -1f,0f,0f,
-            -0.5f, -0.5f, -0.5f,  -1f,0f,0f,
-            -0.5f, -0.5f,  0.5f,  -1f,0f,0f,
-            -0.5f,  0.5f,  0.5f,  -1f,0f,0f,
+            // Left face
+            -0.5f, -0.5f, -0.5f, -1f, 0f, 0f,  0f, 0f,
+            -0.5f, -0.5f,  0.5f, -1f, 0f, 0f,  1f, 0f,
+            -0.5f,  0.5f,  0.5f, -1f, 0f, 0f,  1f, 1f,
+            -0.5f,  0.5f,  0.5f, -1f, 0f, 0f,  1f, 1f,
+            -0.5f,  0.5f, -0.5f, -1f, 0f, 0f,  0f, 1f,
+            -0.5f, -0.5f, -0.5f, -1f, 0f, 0f,  0f, 0f,
 
-            // Right face (normal 1,0,0)
-            0.5f,  0.5f,  0.5f,  1f,0f,0f,
-            0.5f, -0.5f,  0.5f,  1f,0f,0f,
-            0.5f, -0.5f, -0.5f,  1f,0f,0f,
-            0.5f, -0.5f, -0.5f,  1f,0f,0f,
-            0.5f,  0.5f, -0.5f,  1f,0f,0f,
-            0.5f,  0.5f,  0.5f,  1f,0f,0f,
+            // Right face
+            0.5f, -0.5f, -0.5f, 1f, 0f, 0f,  1f, 0f,
+            0.5f,  0.5f, -0.5f, 1f, 0f, 0f,  1f, 1f,
+            0.5f,  0.5f,  0.5f, 1f, 0f, 0f,  0f, 1f,
+            0.5f,  0.5f,  0.5f, 1f, 0f, 0f,  0f, 1f,
+            0.5f, -0.5f,  0.5f, 1f, 0f, 0f,  0f, 0f,
+            0.5f, -0.5f, -0.5f, 1f, 0f, 0f,  1f, 0f,
 
-            // Top face (normal 0,1,0)
-            -0.5f,  0.5f, -0.5f,  0f,1f,0f,
-            -0.5f,  0.5f,  0.5f,  0f,1f,0f,
-            0.5f,  0.5f,  0.5f,  0f,1f,0f,
-            0.5f,  0.5f,  0.5f,  0f,1f,0f,
-            0.5f,  0.5f, -0.5f,  0f,1f,0f,
-            -0.5f,  0.5f, -0.5f,  0f,1f,0f,
+            // Top face
+            -0.5f,  0.5f, -0.5f, 0f, 1f, 0f,  0f, 1f,
+            -0.5f,  0.5f,  0.5f, 0f, 1f, 0f,  0f, 0f,
+            0.5f,  0.5f,  0.5f, 0f, 1f, 0f,  1f, 0f,
+            0.5f,  0.5f,  0.5f, 0f, 1f, 0f,  1f, 0f,
+            0.5f,  0.5f, -0.5f, 0f, 1f, 0f,  1f, 1f,
+            -0.5f,  0.5f, -0.5f, 0f, 1f, 0f,  0f, 1f,
 
-            // Bottom face (normal 0,-1,0)
-            -0.5f, -0.5f, -0.5f,  0f,-1f,0f,
-            0.5f, -0.5f, -0.5f,  0f,-1f,0f,
-            0.5f, -0.5f,  0.5f,  0f,-1f,0f,
-            0.5f, -0.5f,  0.5f,  0f,-1f,0f,
-            -0.5f, -0.5f,  0.5f,  0f,-1f,0f,
-            -0.5f, -0.5f, -0.5f,  0f,-1f,0f
+            // Bottom face
+            -0.5f, -0.5f, -0.5f, 0f, -1f, 0f,  0f, 0f,
+            0.5f, -0.5f, -0.5f, 0f, -1f, 0f,  1f, 0f,
+            0.5f, -0.5f,  0.5f, 0f, -1f, 0f,  1f, 1f,
+            0.5f, -0.5f,  0.5f, 0f, -1f, 0f,  1f, 1f,
+            -0.5f, -0.5f,  0.5f, 0f, -1f, 0f,  0f, 1f,
+            -0.5f, -0.5f, -0.5f, 0f, -1f, 0f,  0f, 0f
     };
 
 
@@ -72,15 +74,20 @@ public class CubeMesh {
         glBufferData(GL_ARRAY_BUFFER, buffer, GL_STATIC_DRAW);
         MemoryUtil.memFree(buffer);
 
-        int stride = 6 * Float.BYTES; // 3 for position, 3 for normal
+        int stride = 8 * Float.BYTES; // 3 pos + 3 normal + 2 uv
 
-        // Position attribute
+// Position
         glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
         glEnableVertexAttribArray(0);
 
-        // Normal attribute
+// Normal
         glVertexAttribPointer(1, 3, GL_FLOAT, false, stride, 3 * Float.BYTES);
         glEnableVertexAttribArray(1);
+
+// UV
+        glVertexAttribPointer(2, 2, GL_FLOAT, false, stride, 6 * Float.BYTES);
+        glEnableVertexAttribArray(2);
+
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);

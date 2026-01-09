@@ -7,6 +7,7 @@ public class Camera {
 
     private final long window;
     private final Vector3f position = new Vector3f(0, 1.5f, 3);
+    private Vector3f front;
     private float pitch = 0f;
     private float yaw = -90f;
 
@@ -77,4 +78,22 @@ public class Camera {
     private Vector3f getRight() {
         return getForward().cross(0, 1, 0, new Vector3f()).normalize();
     }
+
+    public Vector3f getPosition() {
+        return new Vector3f(position); // return a copy to be safe
+    }
+
+    public Vector3f getFront() {
+        return getForward(); // normalized front direction
+    }
+
+    // --- Camera getters for yaw/pitch ---
+    public float getYaw() {
+        return yaw;
+    }
+
+    public float getPitch() {
+        return pitch;
+    }
+
 }

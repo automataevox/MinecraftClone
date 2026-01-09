@@ -16,19 +16,52 @@ ext {
     lwjglVersion = "3.3.4"
 }
 
+tasks.withType(JavaExec) {
+    if (org.gradle.internal.os.OperatingSystem.current().isMacOsX()) {
+        jvmArgs += "-XstartOnFirstThread"
+    }
+}
+
 dependencies {
+    // LWJGL BOM ensures all LWJGL modules use the same version
     implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
 
+    // Core LWJGL modules
     implementation "org.lwjgl:lwjgl"
     implementation "org.lwjgl:lwjgl-glfw"
     implementation "org.lwjgl:lwjgl-opengl"
     implementation "org.lwjgl:lwjgl-stb"
 
-    // ✅ THIS MUST BE HERE
+    // JOML
     implementation "org.joml:joml:1.10.5"
 
-    runtimeOnly "org.lwjgl:lwjgl::natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-glfw::natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-opengl::natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-stb::natives-windows"
+    // Natives for your current OS
+    def os = org.gradle.internal.os.OperatingSystem.current()
+    if (os.isWindows()) {
+        runtimeOnly "org.lwjgl:lwjgl::natives-windows"
+        runtimeOnly "org.lwjgl:lwjgl-glfw::natives-windows"
+        runtimeOnly "org.lwjgl:lwjgl-opengl::natives-windows"
+        runtimeOnly "org.lwjgl:lwjgl-stb::natives-windows"
+    } else if (os.isMacOsX()) {
+        // Detect architecture
+        def arch = System.getProperty("os.arch")
+        if (arch == "aarch64") {
+            // Apple Silicon
+            runtimeOnly "org.lwjgl:lwjgl::natives-macos-arm64"
+            runtimeOnly "org.lwjgl:lwjgl-glfw::natives-macos-arm64"
+            runtimeOnly "org.lwjgl:lwjgl-opengl::natives-macos-arm64"
+            runtimeOnly "org.lwjgl:lwjgl-stb::natives-macos-arm64"
+        } else {
+            // Intel mac
+            runtimeOnly "org.lwjgl:lwjgl::natives-macos"
+            runtimeOnly "org.lwjgl:lwjgl-glfw::natives-macos"
+            runtimeOnly "org.lwjgl:lwjgl-opengl::natives-macos"
+            runtimeOnly "org.lwjgl:lwjgl-stb::natives-macos"
+        }
+    } else if (os.isLinux()) {
+        runtimeOnly "org.lwjgl:lwjgl::natives-linux"
+        runtimeOnly "org.lwjgl:lwjgl-glfw::natives-linux"
+        runtimeOnly "org.lwjgl:lwjgl-opengl::natives-linux"
+        runtimeOnly "org.lwjgl:lwjgl-stb::natives-linux"
+    }
 }
