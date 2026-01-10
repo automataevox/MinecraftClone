@@ -54,15 +54,24 @@ public class RenderManager {
         shader.bind();
         GL13.glActiveTexture(GL13.GL_TEXTURE1);
         shadowManager.getDepthTexture().bind(); // shadow map
-        shader.setUniform3f("u_LightDir", new Vector3f(-0.5f, -1f, -0.3f).normalize());
-        shader.setUniform3f("u_LightColor", new Vector3f(1f,1f,1f));
-        shader.setUniform3f("u_Ambient", new Vector3f(0.3f,0.3f,0.3f));
+
+        // --- Sun movement ---
+        float time = (System.currentTimeMillis() % 120000) / 120000.0f; // 2 min day cycle
+        float sunAngle = time * 2.0f * (float)Math.PI;
+        Vector3f sunDir = new Vector3f((float)Math.sin(sunAngle), (float)Math.cos(sunAngle), -0.3f).normalize();
+        Vector3f sunColor = new Vector3f(1.0f, 0.95f, 0.85f);
+
+        // --- Global illumination ---
+        Vector3f globalIllum = new Vector3f(0.18f, 0.20f, 0.22f);
+
+        shader.setUniform3f("u_LightDir", sunDir);
+        shader.setUniform3f("u_LightColor", sunColor);
+        shader.setUniform3f("u_Ambient", globalIllum);
         shader.setUniform1i("shadowMap", 1);
         shader.setUniformMat4f("u_LightSpaceMatrix", shadowManager.getLightSpaceMatrix());
 
         // Render all cubes
         for (Vector3f cubePos : worldManager.getRenderList()) {
-
             // Get block and its texture
             Block block = worldManager.getBlock(cubePos);
             if (block == null) continue;
@@ -86,6 +95,19 @@ public class RenderManager {
 
     private void renderFace(Vector3f cubePos, Face face) {
         shader.setUniform1f("u_AO", getAmbientOcclusion(face));
+
+        // Check if face is sunlit (no block above in sun direction)
+        float sunlit = 1.0f;
+        // Only check for top face (y+)
+        if (face == Face.TOP) {
+            int aboveX = (int) cubePos.x;
+            int aboveY = (int) cubePos.y + 1;
+            int aboveZ = (int) cubePos.z;
+            if (worldManager.hasCube(aboveX, aboveY, aboveZ)) {
+                sunlit = 0.0f;
+            }
+        }
+        shader.setUniform1f("u_Sunlit", sunlit);
 
         Matrix4f model = new Matrix4f().translate(cubePos.x, cubePos.y, cubePos.z);
         shader.setUniformMat4f("u_Model", model);
