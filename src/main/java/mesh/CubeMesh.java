@@ -108,15 +108,18 @@ public class CubeMesh {
 
     public static void addFace(FloatBuffer buffer, int x, int y, int z, Face face) {
         float[][] verts = face.getVertices();
+        float[] normal = face.getNormal(); // Get normal from Face enum
 
-        // CORRECT texture coordinates for a cube face
+        // For 16x16 textures with nearest-neighbor
+        float pixelOffset = 0.5f / 16.0f;
+
         float[][] texCoords = {
-                {0.0f, 0.0f},  // bottom-left
-                {1.0f, 0.0f},  // bottom-right
-                {1.0f, 1.0f},  // top-right
-                {1.0f, 1.0f},  // top-right (duplicate)
-                {0.0f, 1.0f},  // top-left
-                {0.0f, 0.0f}   // bottom-left (duplicate)
+                {0.0f + pixelOffset, 1.0f - pixelOffset},
+                {1.0f - pixelOffset, 1.0f - pixelOffset},
+                {1.0f - pixelOffset, 0.0f + pixelOffset},
+                {1.0f - pixelOffset, 0.0f + pixelOffset},
+                {0.0f + pixelOffset, 0.0f + pixelOffset},
+                {0.0f + pixelOffset, 1.0f - pixelOffset}
         };
 
         for (int i = 0; i < 6; i++) {
@@ -125,9 +128,14 @@ public class CubeMesh {
             buffer.put(verts[i][1] + y);
             buffer.put(verts[i][2] + z);
 
-            // Texture coordinates (2 floats) - MAKE SURE THESE ARE ADDED!
-            buffer.put(texCoords[i][0]);  // u
-            buffer.put(texCoords[i][1]);  // v
+            // Normal (3 floats) - ADD THIS!
+            buffer.put(normal[0]);
+            buffer.put(normal[1]);
+            buffer.put(normal[2]);
+
+            // Texture coordinates (2 floats)
+            buffer.put(texCoords[i][0]);
+            buffer.put(texCoords[i][1]);
         }
     }
 

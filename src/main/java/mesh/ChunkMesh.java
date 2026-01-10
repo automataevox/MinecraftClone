@@ -25,11 +25,16 @@ public class ChunkMesh {
         glBindVertexArray(vao);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, 5 * Float.BYTES, 0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, false, 5 * Float.BYTES, 3 * Float.BYTES);
+        // 8 floats per vertex: 3 pos + 3 normal + 2 texcoord
+        int stride = 8 * Float.BYTES;
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);                    // position
+        glVertexAttribPointer(1, 3, GL_FLOAT, false, stride, 3 * Float.BYTES);      // normal
+        glVertexAttribPointer(2, 2, GL_FLOAT, false, stride, 6 * Float.BYTES);      // texcoord
 
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
+        glEnableVertexAttribArray(2);
 
         glBindVertexArray(0);
     }
@@ -41,7 +46,7 @@ public class ChunkMesh {
     public void build(Chunk chunk) {
         System.out.println("Building chunk mesh at (" + chunk.chunkX + ", " + chunk.chunkZ + ")");
 
-        FloatBuffer buffer = MemoryUtil.memAllocFloat(Chunk.SIZE * Chunk.SIZE * Chunk.SIZE * 6 * 6 * 5);
+        FloatBuffer buffer = MemoryUtil.memAllocFloat(Chunk.SIZE * Chunk.SIZE * Chunk.SIZE * 6 * 6 * 8);
         int faceCount = 0;
 
         for (int x = 0; x < Chunk.SIZE; x++) {
@@ -64,7 +69,7 @@ public class ChunkMesh {
 
         // FIX: Only ONE flip() here!
         buffer.flip();
-        vertexCount = buffer.remaining() / 5;
+        vertexCount = buffer.remaining() / 8;
         System.out.println("Vertex count: " + vertexCount);
 
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
