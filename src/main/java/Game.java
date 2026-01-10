@@ -1,38 +1,27 @@
-import org.joml.Matrix4f;
+import camera.Camera;
+import org.lwjgl.opengl.GL;
+import physics.RaycastManager;
+import player.Player;
+import render.HighlightManager;
+import render.RenderManager;
+import render.ShadowManager;
+import world.WorldManager;
 import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFWErrorCallback;
-import org.lwjgl.opengl.GL;
-import shader.Shader;
-
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
-import static org.lwjgl.opengl.GL13.glActiveTexture;
-
 import java.io.IOException;
-import java.util.*;
 
 public class Game {
-
-    // --- Fields ---
-    private Set<Vector3f> cubes = new HashSet<>();
-    private List<Vector3f> renderList = new ArrayList<>(); // faster iteration for rendering
-    private Map<Vector3f, Matrix4f> mvpCache = new HashMap<>();
-    private Vector3f hoveredCube = null;
-
-    private long window;
+    private Window window;
     private Camera camera;
-    private CubeMesh cube;
-    private Shader shader;
-    private Shader highlightShader;
-    private WireCubeMesh highlightCube;
-    private Texture cubeTexture;
+    private Player player;
+    private WorldManager worldManager;
+    private RenderManager renderManager;
+    private HighlightManager highlightManager;
+    private RaycastManager raycastManager;
+    private ShadowManager shadowManager;
 
-    private Vector3f lastCameraPos = new Vector3f();
-    private float lastYaw, lastPitch;
-    private boolean cameraMoved = true; // force initial mvp update
-
-    // --- Run Game ---
     public void run() {
         init();
         loop();
@@ -42,200 +31,85 @@ public class Game {
     // --- Initialization ---
     private void init() {
         GLFWErrorCallback.createPrint(System.err).set();
-        if (!glfwInit()) throw new IllegalStateException("GLFW failed");
+        window = new Window(1280, 720, "Minecraft Clone");
+        window.init();
+        initOpenGL();
+        initManagers();
+    }
 
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-        window = glfwCreateWindow(1280, 720, "Minecraft Clone", 0, 0);
-        glfwMakeContextCurrent(window);
-        glfwSwapInterval(1);
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
+    private void initOpenGL() {
         GL.createCapabilities();
-
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
         glClearColor(0.53f, 0.81f, 0.92f, 1.0f);
+    }
 
-        cubeTexture = new Texture("src/main/java/textures/grass.jpg");
-        camera = new Camera(window);
-        cube = new CubeMesh();
-        highlightCube = new WireCubeMesh();
+    private void initManagers() {
+        camera = new Camera(window.getHandle());
+        worldManager = new WorldManager();
 
-        // Load shaders
         try {
-            shader = new Shader("src/main/java/shader/cube.vert", "src/main/java/shader/cube.frag");
-            highlightShader = new Shader("src/main/java/shader/highlight.vert", "src/main/java/shader/highlight.frag");
+            shadowManager = new ShadowManager(worldManager);
+            renderManager = new RenderManager(worldManager, camera, shadowManager);
+            highlightManager = new HighlightManager(camera);
+            raycastManager = new RaycastManager(worldManager);
         } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Failed to load shaders");
+            e.printStackTrace(); throw new RuntimeException("Failed to initialize shaders or textures");
         }
 
-        // Initialize cubes
-        for (int x = -5; x <= 5; x++) {
-            for (int y = 0; y <= 2; y++) {
-                for (int z = -5; z <= 5; z++) {
-                    Vector3f c = new Vector3f(x, y, z);
-                    cubes.add(c);
-                    renderList.add(c);
-                }
-            }
-        }
+        player = new Player(camera, worldManager);
+        Vector3f spawn = worldManager.getSpawnPoint();
+        camera.setPosition(spawn);
+        worldManager.generateChunksAround(spawn);
     }
 
-    // --- Main Loop ---
     private void loop() {
-        while (!glfwWindowShouldClose(window)) {
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        float lastTime = (float) glfwGetTime();
+        while (!window.shouldClose()) {
+            float currentTime = (float) glfwGetTime();
+            float deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            window.clear();
+            worldManager.generateChunksAround(player.getCamera().getPosition());
 
-            camera.update();
+            // --- Player Movement ---
+            boolean forward = glfwGetKey(window.getHandle(), GLFW_KEY_W) == GLFW_PRESS;
+            boolean backward = glfwGetKey(window.getHandle(), GLFW_KEY_S) == GLFW_PRESS;
+            boolean left = glfwGetKey(window.getHandle(), GLFW_KEY_A) == GLFW_PRESS;
+            boolean right = glfwGetKey(window.getHandle(), GLFW_KEY_D) == GLFW_PRESS;
+            boolean jump = glfwGetKey(window.getHandle(), GLFW_KEY_SPACE) == GLFW_PRESS;
 
-            // Detect if camera moved
-            cameraMoved = !camera.getPosition().equals(lastCameraPos) ||
-                    camera.getYaw() != lastYaw ||
-                    camera.getPitch() != lastPitch;
+            camera.updateRotation();
+            player.update(deltaTime, forward, backward, left, right, jump);
 
-            if (cameraMoved) {
-                updateMVPCache();
-                lastCameraPos.set(camera.getPosition());
-                lastYaw = camera.getYaw();
-                lastPitch = camera.getPitch();
-            }
+            // --- Raycasting / Highlighting ---
+            Vector3f hoveredCube = raycastManager.raycastBlock(player.getCamera().getPosition(), player.getCamera().getFront());
+            highlightManager.setHoveredCube(hoveredCube);
 
-            // Raycast only when mouse moves or camera moves
-            hoveredCube = raycastBlock();
+            // --- Handle block breaking ---
+            handleBlockBreak(hoveredCube);
 
-            // BREAK BLOCK with left mouse button
-            if (hoveredCube != null && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-                cubes.remove(hoveredCube);
-                renderList.remove(hoveredCube);
-                mvpCache.remove(hoveredCube);
-                hoveredCube = null;
-            }
-
-            shader.bind();
-            glActiveTexture(GL_TEXTURE0);
-            cubeTexture.bind();
-
-            shader.setUniform3f("u_LightDir", new Vector3f(-0.5f, -1f, -0.3f).normalize());
-            shader.setUniform3f("u_LightColor", new Vector3f(1f,1f,1f));
-            shader.setUniform3f("u_Ambient", new Vector3f(0.3f,0.3f,0.3f));
-            shader.setUniform1i("u_Texture", 0);
-
-            for (Vector3f c : renderList) {
-                EnumSet<Face> faces = getVisibleFaces(c);
-
-                for (Face f : faces) {
-                    // Set AO per face
-                    float ao = 1.0f;
-                    if (f == Face.BOTTOM) ao = 0.5f;
-                    else if (f == Face.LEFT || f == Face.RIGHT) ao = 0.7f;
-                    shader.setUniform1f("u_AO", ao);
-
-                    // Build model matrix for this cube
-                    Matrix4f model = new Matrix4f().translate(c.x, c.y, c.z);
-                    shader.setUniformMat4f("u_Model", model);
-
-                    // Build MVP for this cube (projection * view * model)
-                    Matrix4f mvp = new Matrix4f();
-                    camera.getProjection().mul(camera.getView(), mvp);
-                    mvp.mul(model);
-                    shader.setUniformMat4f("u_MVP", mvp);
-
-                    // Render the face
-                    cube.renderFace(f);
-                }
-            }
-
-            cubeTexture.unbind();
-            shader.unbind();
-
-            // Draw highlight on top of hovered cube
-            if (hoveredCube != null) {
-                highlightShader.bind();
-                Matrix4f model = new Matrix4f().translate(hoveredCube.x, hoveredCube.y, hoveredCube.z);
-                Matrix4f mvp = new Matrix4f();
-                camera.getProjection().mul(camera.getView(), mvp);
-                mvp.mul(model);
-
-                highlightShader.setUniformMat4f("u_MVP", mvp);
-                highlightShader.setUniform3f("u_Color", new Vector3f(1f, 1f, 0f)); // yellow
-                highlightCube.render();
-                highlightShader.unbind();
-            }
-
-            glfwSwapBuffers(window);
-            glfwPollEvents();
+            // --- Render World ---
+            renderManager.render();
+            highlightManager.render();
+            window.swapBuffers();
+            window.pollEvents();
         }
     }
 
-    // --- Update MVP Cache ---
-    private void updateMVPCache() {
-        Matrix4f view = camera.getView();
-        Matrix4f proj = camera.getProjection();
-        mvpCache.clear();
-        for (Vector3f c : renderList) {
-            Matrix4f model = new Matrix4f().translate(c.x, c.y, c.z);
-            Matrix4f mvp = new Matrix4f();
-            proj.mul(view, mvp);
-            mvp.mul(model);
-            mvpCache.put(c, mvp);
+    private void handleBlockBreak(Vector3f hoveredCube) {
+        if (hoveredCube != null && glfwGetMouseButton(window.getHandle(), GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            worldManager.breakBlock(hoveredCube);
         }
     }
 
+    // --- Cleanup ---
     private void cleanup() {
-        cube.cleanup();
-        highlightCube.cleanup();
-        shader.cleanup();
-        highlightShader.cleanup();
-        glfwTerminate();
+        renderManager.cleanup();
+        highlightManager.cleanup();
+        raycastManager.cleanup();
+        worldManager.cleanup();
+        window.cleanup();
     }
-
-    private Vector3f raycastBlock() {
-        Vector3f origin = camera.getPosition();
-        Vector3f dir = camera.getFront();
-
-        float maxDistance = 10f;
-        float step = 0.2f; // fewer steps for performance
-
-        for (float t = 0; t < maxDistance; t += step) {
-            Vector3f point = new Vector3f(origin).fma(t, dir);
-            int x = Math.round(point.x);
-            int y = Math.round(point.y);
-            int z = Math.round(point.z);
-
-            if (isCubeAt(x, y, z)) return new Vector3f(x, y, z);
-        }
-        return null;
-    }
-
-    private boolean isCubeAt(int x, int y, int z) {
-        return cubes.contains(new Vector3f(x, y, z));
-    }
-
-    private boolean hasCube(int x, int y, int z) {
-        return cubes.contains(new Vector3f(x, y, z));
-    }
-
-    private EnumSet<Face> getVisibleFaces(Vector3f c) {
-        EnumSet<Face> faces = EnumSet.allOf(Face.class);
-
-        for (Face f : Face.values()) {
-            if (hasCube(
-                    (int)c.x + f.dx,
-                    (int)c.y + f.dy,
-                    (int)c.z + f.dz
-            )) {
-                faces.remove(f);
-            }
-        }
-        return faces;
-    }
-
 }
-
-

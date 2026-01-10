@@ -5,10 +5,9 @@ import org.joml.Vector3f;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.system.MemoryStack;
 
-import java.io.IOException;
 import java.nio.FloatBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.IOException;
+import java.io.InputStream;
 
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30.glDeleteProgram;
@@ -17,10 +16,10 @@ public class Shader {
 
     private final int programId;
 
-    public Shader(String vertexPath, String fragmentPath) throws IOException {
-        // Load shader sources
-        String vertexSource = Files.readString(Path.of(vertexPath));
-        String fragmentSource = Files.readString(Path.of(fragmentPath));
+    public Shader(String vertexResourcePath, String fragmentResourcePath) throws IOException {
+        // Load shader sources from resources
+        String vertexSource = loadSource(vertexResourcePath);
+        String fragmentSource = loadSource(fragmentResourcePath);
 
         // Compile shaders
         int vertexShader = compileShader(vertexSource, GL_VERTEX_SHADER);
@@ -34,7 +33,7 @@ public class Shader {
 
         // Check linking
         if (glGetProgrami(programId, GL_LINK_STATUS) == GL_FALSE) {
-            throw new RuntimeException("Program linking failed: " + glGetProgramInfoLog(programId));
+            throw new IOException("Program linking failed: " + glGetProgramInfoLog(programId));
         }
 
         // Clean up individual shaders
@@ -44,17 +43,22 @@ public class Shader {
         glDeleteShader(fragmentShader);
     }
 
-    private int compileShader(String source, int type) {
+    private String loadSource(String resourcePath) throws IOException {
+        InputStream in = getClass().getClassLoader().getResourceAsStream(resourcePath);
+        if (in == null) {
+            throw new IOException("Shader resource not found: " + resourcePath);
+        }
+        return new String(in.readAllBytes());
+    }
+
+    private int compileShader(String source, int type) throws IOException {
         int shaderId = glCreateShader(type);
         glShaderSource(shaderId, source);
         glCompileShader(shaderId);
 
         // Check compilation
         if (glGetShaderi(shaderId, GL_COMPILE_STATUS) == GL_FALSE) {
-            throw new RuntimeException(
-                    (type == GL_VERTEX_SHADER ? "Vertex" : "Fragment") +
-                            " shader compilation failed: " + glGetShaderInfoLog(shaderId)
-            );
+            throw new java.io.IOException((type == GL_VERTEX_SHADER ? "Vertex" : "Fragment") + " shader compilation failed: " + glGetShaderInfoLog(shaderId));
         }
         return shaderId;
     }

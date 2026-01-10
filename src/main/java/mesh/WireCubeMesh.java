@@ -1,3 +1,5 @@
+package mesh;
+
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.FloatBuffer;
