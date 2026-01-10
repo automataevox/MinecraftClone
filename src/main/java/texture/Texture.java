@@ -39,11 +39,6 @@ public class Texture {
 
             width = w.get();
             height = h.get();
-            if (width != height) {
-                System.out.println("[Texture] WARNING: Texture " + resourcePath + " is not square: " + width + "x" + height);
-            } else {
-                System.out.println("[Texture] Loaded " + resourcePath + " size: " + width + "x" + height);
-            }
 
             id = glGenTextures();
             glBindTexture(GL_TEXTURE_2D, id);
