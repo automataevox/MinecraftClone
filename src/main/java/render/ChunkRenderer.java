@@ -23,9 +23,9 @@ public class ChunkRenderer {
     private final ShadowManager shadowManager;
 
     // Performance settings
-    private final int RENDER_DISTANCE = 8;
-    private final int MAX_ASYNC_BUILDS_PER_FRAME = 3;
-    private final int MAX_SYNC_BUILDS_PER_FRAME = 2;
+    private static final int RENDER_DISTANCE = 4;
+    private final int MAX_ASYNC_BUILDS_PER_FRAME = 12;
+    private final int MAX_SYNC_BUILDS_PER_FRAME = 5;
 
     // Mesh cache
     private final Map<String, ChunkMesh> chunkMeshes = new HashMap<>();
@@ -49,6 +49,23 @@ public class ChunkRenderer {
 
         this.shader = new Shader("shader/cube/cube.vert", "shader/cube/cube.frag");
         this.textureAtlas = new TextureAtlas();
+        // TEMPORARY: Build initial meshes sync
+        System.out.println("=== BUILDING INITIAL MESHES ===");
+        List<Chunk> initialChunks = worldManager.getLoadedChunks();
+        for (Chunk chunk : initialChunks) {
+            if (chunk.hasVisibleBlocks()) {
+                String key = getChunkKey(chunk.chunkX, chunk.chunkZ);
+                ChunkMesh mesh = new ChunkMesh();
+                mesh.buildSync(chunk, textureAtlas);
+                chunkMeshes.put(key, mesh);
+                System.out.println("Built mesh for " + key + ": " + mesh.getVertexCount() + " vertices");
+            }
+        }
+        System.out.println("=== END ===");
+    }
+
+    public static int getRenderDistance() {
+        return RENDER_DISTANCE;
     }
 
     public void setPriorityChunks(List<String> priorityChunks) {
@@ -146,22 +163,70 @@ public class ChunkRenderer {
     }
 
     private void setupLightingUniforms() {
-        float time = (System.currentTimeMillis() % 60000) / 60000.0f;
+        // Slower day/night cycle (4 minutes)
+        float dayCycle = 24000.0f; // 4 minutes in milliseconds
+        float time = (System.currentTimeMillis() % (int)dayCycle) / dayCycle;
         float sunAngle = time * 2.0f * (float)Math.PI;
+
+        // Sun direction with smooth animation
         Vector3f sunDir = new Vector3f(
-                (float)Math.sin(sunAngle),
-                (float)Math.cos(sunAngle),
+                (float)Math.sin(sunAngle) * 0.8f,
+                Math.max(0.0f, (float)Math.cos(sunAngle)) * 0.7f + 0.3f, // Never goes below 0.3
                 -0.3f
         ).normalize();
 
+        // Dynamic colors based on sun height
+        float sunHeight = sunDir.y;
+        Vector3f sunColor;
+        Vector3f ambient;
+
+        if (sunHeight > 0.6f) {
+            // Midday
+            sunColor = new Vector3f(1.0f, 0.95f, 0.85f);
+            ambient = new Vector3f(0.25f, 0.28f, 0.32f);
+        } else if (sunHeight > 0.3f) {
+            // Morning/Evening
+            float t = (sunHeight - 0.3f) / 0.3f;
+            sunColor = new Vector3f(
+                    1.0f,
+                    0.7f + 0.25f * t,
+                    0.4f + 0.45f * t
+            );
+            ambient = new Vector3f(
+                    0.20f + 0.05f * t,
+                    0.22f + 0.06f * t,
+                    0.25f + 0.07f * t
+            );
+        } else {
+            // Dawn/Dusk/Night
+            float t = sunHeight / 0.3f;
+            sunColor = new Vector3f(
+                    0.3f + 0.7f * t,
+                    0.3f + 0.4f * t,
+                    0.5f + 0.35f * t
+            );
+            ambient = new Vector3f(
+                    0.10f + 0.10f * t,
+                    0.12f + 0.10f * t,
+                    0.15f + 0.10f * t
+            );
+        }
+
+        // Set all uniforms
         shader.setUniform3f("u_LightDir", sunDir);
-        shader.setUniform3f("u_LightColor", new Vector3f(1.0f, 0.95f, 0.85f));
-        shader.setUniform3f("u_Ambient", new Vector3f(0.18f, 0.20f, 0.22f));
+        shader.setUniform3f("u_LightColor", sunColor);
+        shader.setUniform3f("u_Ambient", ambient);
         shader.setUniform3f("u_ViewPos", camera.getPosition());
         shader.setUniform1f("u_Time", System.currentTimeMillis() / 1000.0f);
-        shader.setUniform1i("u_UseFog", 0);
-        shader.setUniform1i("u_UseWind", 0);
-        shader.setUniform1i("u_UsePBR", 0);
+
+        // Shader mode settings
+        shader.setUniform1i("u_UseFog", 1);      // Disable fog for performance
+        shader.setUniform1i("u_UsePBR", 1);      // Simple lighting (faster)
+        shader.setUniform1i("u_UseShadows", 1);  // Enable shadows
+
+        // Material properties (can be per-block later)
+        shader.setUniform1f("u_Roughness", 0.8f);
+        shader.setUniform1f("u_Metallic", 0.0f);
     }
 
     private void processCompletedAsyncBuilds() {
@@ -210,7 +275,6 @@ public class ChunkRenderer {
             // Skip if chunk is modified (will be handled by priority or sync)
             if (chunk.isModified()) {
                 // Modified chunks should be built synchronously to ensure correct state
-                System.out.println("⚠️ Skipping async build for modified chunk " + key);
                 continue;
             }
 
@@ -221,7 +285,6 @@ public class ChunkRenderer {
             pendingBuilds.put(key, future);
             started++;
 
-            System.out.println("🚀 Started async mesh build for chunk " + key);
         }
     }
 

@@ -93,15 +93,19 @@ public class RenderManager {
         shader.bind();
 
         // Simple lighting setup for debug rendering
-        Vector3f sunDir = new Vector3f(0.5f, 0.8f, 0.3f).normalize();
+        float time = (System.currentTimeMillis() % 120000) / 120000.0f; // 2 min day cycle
+        float sunAngle = time * 2.0f * (float)Math.PI;
+        Vector3f sunDir = new Vector3f((float)Math.sin(sunAngle), (float)Math.cos(sunAngle), -0.3f).normalize();
         Vector3f sunColor = new Vector3f(1.0f, 0.95f, 0.85f);
+
+        // --- Global illumination ---
         Vector3f globalIllum = new Vector3f(0.18f, 0.20f, 0.22f);
 
         shader.setUniform3f("u_LightDir", sunDir);
         shader.setUniform3f("u_LightColor", sunColor);
         shader.setUniform3f("u_Ambient", globalIllum);
-        shader.setUniform1f("u_Sunlit", 1.0f);
-        shader.setUniform3f("u_ViewPos", camera.getPosition());
+        shader.setUniform1i("shadowMap", 1);
+        shader.setUniformMat4f("u_LightSpaceMatrix", shadowManager.getLightSpaceMatrix());
 
         // Render each block
         for (Vector3f pos : worldManager.getRenderList()) {

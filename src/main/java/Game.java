@@ -3,10 +3,7 @@ import mesh.ChunkMesh;
 import org.lwjgl.opengl.GL;
 import physics.RaycastManager;
 import player.Player;
-import render.ChunkMeshBuilder;
-import render.HighlightManager;
-import render.RenderManager;
-import render.ShadowManager;
+import render.*;
 import texture.TextureAtlasGenerator;
 import world.Chunk;
 import world.WorldManager;
@@ -43,7 +40,7 @@ public class Game {
 
     // Shadow update optimization
     private int shadowUpdateCounter = 0;
-    public boolean shadowsEnabled = false;
+    public boolean shadowsEnabled = true;
 
     public void run() {
         init();
@@ -83,7 +80,7 @@ public class Game {
             renderManager = new RenderManager(worldManager, camera, shadowManager);
             highlightManager = new HighlightManager(camera);
             raycastManager = new RaycastManager(worldManager);
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
             throw new RuntimeException("Failed to initialize shaders or textures");
         }
@@ -207,6 +204,9 @@ public class Game {
         // Chunk generation rate limiting
         float chunkGenTimer = 0;
         final float CHUNK_GEN_INTERVAL = 0.1f;
+
+        glClearColor(0.0f, 0.01f, 0.035f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         while (!window.shouldClose()) {
             float currentTime = (float) glfwGetTime();

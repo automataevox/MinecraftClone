@@ -49,6 +49,7 @@ public class TextureAtlasGenerator {
 
         // Stone
         textures.add(new TextureInfo("stone", "textures/blocks/stone.png"));
+        textures.add(new TextureInfo("sand", "textures/blocks/sand.png"));
 
         // Debug textures
         textures.add(new TextureInfo("debug", "textures/blocks/debug.png"));

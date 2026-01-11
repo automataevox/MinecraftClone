@@ -45,9 +45,10 @@ public class TextureAtlas {
         registerSimple("grass_side", 1, 0);
         registerSimple("dirt", 2, 0);
         registerSimple("stone", 3, 0);
+        registerSimple("sand", 5, 0);
 
         // Row 1
-        registerSimple("debug", 0, 1);
+        registerSimple("debug", 6, 0);
 
     }
 

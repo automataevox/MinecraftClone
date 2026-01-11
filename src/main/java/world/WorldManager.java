@@ -2,8 +2,8 @@ package world;
 
 import org.joml.Vector2i;
 import org.joml.Vector3f;
-import world.blocks.GrassBlock;
-import world.blocks.StoneBlock;
+import render.ChunkRenderer;
+import world.blocks.*;
 import world.generator.NoiseGenerator;
 
 import java.io.*;
@@ -13,8 +13,8 @@ public class WorldManager {
     private final Map<Vector2i, Chunk> chunks = new HashMap<>();
     private final Map<Vector3f, Block> blocks = new HashMap<>();
     private final int CHUNK_SIZE = 16;
-    private final int RENDER_DISTANCE = 3;
-    private final int PRELOAD_DISTANCE = 0;
+    private final int RENDER_DISTANCE = ChunkRenderer.getRenderDistance();
+    private final int PRELOAD_DISTANCE = 6;
 
     // Chunk loading queue
     private final Queue<Vector2i> chunksToGenerate = new LinkedList<>();
@@ -46,13 +46,10 @@ public class WorldManager {
             chunks.put(chunkKey, loadedChunk);
             // IMPORTANT: Update the blocks map with loaded chunk data
             updateBlocksMapFromChunk(loadedChunk);
-            System.out.println("✓ Loaded SAVED chunk " + chunkX + "," + chunkZ +
-                    " (" + loadedChunk.getVisibleBlockCount() + " visible blocks)");
             return;
         }
 
         // 2. SECOND: Generate new chunk (only if no saved data exists)
-        System.out.println("Generating NEW chunk " + chunkX + "," + chunkZ);
         Chunk chunk = new Chunk(chunkX, 0, chunkZ);
         chunks.put(chunkKey, chunk);
 
@@ -66,24 +63,64 @@ public class WorldManager {
                 int worldX = x + worldXOffset;
                 int worldZ = z + worldZOffset;
 
-                float n = noise.interpolatedNoise(worldX * 0.1f, worldZ * 0.1f);
-                int baseHeight = (int)((n + 2f) * 4) + 1;
+                // Terrain height noise
+                float n = noise.interpolatedNoise(worldX * .02f, worldZ * .04f);
+                int baseHeight = (int)((n + 2f) * 4) + 5;
 
-                float stoneNoiseVal = stoneNoise.interpolatedNoise(worldX * 0.2f, worldZ * 0.2f);
+                // Stone layer thickness
+                float stoneNoiseVal = stoneNoise.interpolatedNoise(worldX * 0.1f, worldZ * 0.2f);
                 int stoneLayers = 10 + (int)((stoneNoiseVal + 1f) * 1.5f);
 
                 int totalHeight = Math.max(baseHeight, stoneLayers + 1);
+
+                // Biome/moisture noise to determine top block type
+                // Using lower frequency for larger biome areas
+                float moisture = noise.interpolatedMoistureNoise(worldX * 0.5f, worldZ * 0.5f);
 
                 for (int y = 0; y < totalHeight; y++) {
                     Vector3f pos = new Vector3f(worldX, y, worldZ);
                     Block block;
 
+                    // Top layer logic
                     if (y == totalHeight - 1) {
+                        // Determine top block based on moisture noise
+                        if (moisture > 0.2f) {
+                            // Moist areas get grass (you'll need to create a GrassBlock class)
+                            block = new GrassBlock();
+                        } else if (moisture < -0.2f) {
+                            // Dry areas get sand
+                            block = new SandBlock();
+                        } else {
+                            // Transition areas get dirt (you'll need to create a DirtBlock class)
+                            block = new GrassBlock();
+                        }
+                    }
+                    // Just below top layer - convert grass to dirt or keep as sand
+                    else if (y == totalHeight - 2) {
+                        if (moisture > 0.2f) {
+                            // Under grass should be dirt
+                            block = new DirtBlock();
+                        } else {
+                            // Under sand should be more sand
+                            block = new SandBlock();
+                        }
+                    }
+                    // Upper stone layers (with some dirt transition)
+                    else if (y >= totalHeight - 3 && y >= totalHeight - 1 - stoneLayers) {
+                        // Add some dirt/gravel transition before pure stone
+                        if (y >= totalHeight - 5 && y < totalHeight - 3 && moisture > 0.2f) {
+                            block = new GrassBlock();
+                        } else {
+                            block = new StoneBlock();
+                        }
+                    }
+                    // Pure stone layers
+                    else if (y >= totalHeight - 1 - stoneLayers) {
+                        block = new StoneBlock();
+                    }
+                    // Everything else (debug or air)
+                    else {
                         block = new GrassBlock();
-                    } else if (y >= totalHeight - 1 - stoneLayers) {
-                        block = new StoneBlock();
-                    } else {
-                        block = new StoneBlock();
                     }
 
                     blocks.put(pos, block);
@@ -91,8 +128,6 @@ public class WorldManager {
                 }
             }
         }
-
-        System.out.println("  Generated with " + chunk.getVisibleBlockCount() + " visible blocks");
     }
 
     // === NEW: Update blocks map from loaded chunk ===
@@ -151,8 +186,10 @@ public class WorldManager {
                                 dos.writeUTF("grass");
                             } else if (block instanceof StoneBlock) {
                                 dos.writeUTF("stone");
+                            } else if (block instanceof SandBlock) {
+                                dos.writeUTF("sand");
                             } else {
-                                dos.writeUTF("stone"); // Default
+                                dos.writeUTF("null"); // Default
                             }
                             savedBlocks++;
                         } else {
@@ -161,9 +198,6 @@ public class WorldManager {
                     }
                 }
             }
-
-            System.out.println("💾 Saved chunk " + chunk.chunkX + "," + chunk.chunkZ +
-                    " (" + savedBlocks + " blocks)");
 
         } catch (IOException e) {
             System.err.println("❌ Failed to save chunk " + chunk.chunkX + "," + chunk.chunkZ + ": " + e.getMessage());
@@ -210,9 +244,18 @@ public class WorldManager {
                                 case "stone":
                                     block = new StoneBlock();
                                     break;
+                                case "sand":
+                                    block = new SandBlock();
+                                    break;
+                                case "debug":
+                                    block = new DebugBlock();
+                                    break;
+                                case null:
+                                    block = new DebugBlock();
+                                    break;
                                 default:
-                                    System.err.println("Unknown block type: " + blockType + ", using stone");
-                                    block = new StoneBlock();
+                                    System.err.println("Unknown block type: " + blockType + ", using dirt");
+                                    block = new DirtBlock();
                             }
 
                             chunk.setBlock(x, y, z, block);
@@ -222,9 +265,6 @@ public class WorldManager {
                     }
                 }
             }
-
-            System.out.println("📂 Loaded saved chunk " + chunkX + "," + chunkZ +
-                    " (" + loadedBlocks + " blocks)");
 
             // Mark as NOT modified (since we just loaded it fresh)
             chunk.markClean();
@@ -239,11 +279,9 @@ public class WorldManager {
     // === MODIFIED: Save all modified chunks ===
     public void saveModifiedChunks() {
         if (modifiedChunks.isEmpty()) {
-            System.out.println("No modified chunks to save");
             return;
         }
 
-        System.out.println("Saving " + modifiedChunks.size() + " modified chunks...");
         int savedCount = 0;
 
         // Create a copy to avoid ConcurrentModificationException
@@ -260,7 +298,6 @@ public class WorldManager {
 
         // Only clear the ones we saved
         modifiedChunks.removeAll(chunksToSave);
-        System.out.println("✅ Saved " + savedCount + " chunks");
     }
 
     // === MODIFIED: Mark chunk as modified ===
@@ -274,7 +311,6 @@ public class WorldManager {
             // (Chunk.setBlock() should already do this, but just in case)
         }
 
-        System.out.println("📝 Marked chunk " + chunkX + "," + chunkZ + " as modified");
     }
 
     // === MODIFIED: breakBlock ===
@@ -283,7 +319,6 @@ public class WorldManager {
         int y = (int)pos.y;
         int z = (int)pos.z;
 
-        System.out.println("Breaking block at " + x + "," + y + "," + z);
 
         // Remove from blocks map
         Vector3f blockPos = new Vector3f(x, y, z);
@@ -307,7 +342,6 @@ public class WorldManager {
 
             // Mark chunk as modified
             markChunkModified(chunkX, chunkZ);
-            System.out.println("  Chunk " + chunkX + "," + chunkZ + " marked as modified");
         } else {
             System.out.println("  ERROR: Chunk not loaded!");
         }
@@ -366,7 +400,6 @@ public class WorldManager {
 
             // Mark chunk as modified
             markChunkModified(chunkX, chunkZ);
-            System.out.println("  Chunk " + chunkX + "," + chunkZ + " marked as modified");
         }
 
         return true;
@@ -421,7 +454,6 @@ public class WorldManager {
 
                 // SAVE before unloading!
                 if (chunk.isModified()) {
-                    System.out.println("💾 Saving chunk " + chunkKey.x + "," + chunkKey.y + " before unloading");
                     saveChunkToDisk(chunk);
                     chunk.markClean();
                     modifiedChunks.remove(chunkKey);
@@ -440,14 +472,12 @@ public class WorldManager {
 
                 // Remove chunk
                 iterator.remove();
-                System.out.println("🗑️ Unloaded chunk " + chunkKey.x + "," + chunkKey.y);
             }
         }
     }
 
     // === MODIFIED: Cleanup - save everything ===
     public void cleanup() {
-        System.out.println("🧹 WorldManager cleanup - saving all modified chunks");
 
         // Save all modified chunks
         saveModifiedChunks();
@@ -506,7 +536,6 @@ public class WorldManager {
             }
         }
 
-        System.out.println("Initial chunks generated: " + chunks.size());
     }
 
     public Set<Vector3f> getRenderList() {
