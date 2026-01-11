@@ -91,12 +91,9 @@ java -jar build/libs/untitled.jar
 |---------|--------|
 | **W/A/S/D** | Move forward/left/backward/right |
 | **Space** | Jump |
-| **Shift** | Sprint |
 | **Left Click** | Remove block |
-| **Right Click** | Place block |
 | **Mouse** | Look around |
-| **ESC** | Pause/Menu |
-| **F3** | Debug info |
+
 
 ## Game Features Explained
 
