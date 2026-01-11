@@ -30,6 +30,11 @@ public class Game {
     private RaycastManager raycastManager;
     private ShadowManager shadowManager;
 
+    // Add these fields
+    private boolean saveOnExit = true;
+    private float saveTimer = 0;
+    private final float SAVE_INTERVAL = 30.0f; // Auto-save every 30 seconds
+
     // FPS optimization variables
     private int frameCount = 0;
     private float fpsTimer = 0;
@@ -129,19 +134,21 @@ public class Game {
     private void setupCallbacks() {
         // Set up window resize callback
         glfwSetFramebufferSizeCallback(window.getHandle(), (windowHandle, width, height) -> {
-            // Update OpenGL viewport
             glViewport(0, 0, width, height);
         });
 
-        // Optional: Add F11 key for fullscreen toggle
+        // Add key callbacks
         glfwSetKeyCallback(window.getHandle(), (windowHandle, key, scancode, action, mods) -> {
             if (key == GLFW_KEY_F11 && action == GLFW_PRESS) {
                 toggleFullscreen();
             }
-            // Optional: Toggle shadows with F10
             if (key == GLFW_KEY_F10 && action == GLFW_PRESS) {
                 shadowsEnabled = !shadowsEnabled;
                 System.out.println("Shadows " + (shadowsEnabled ? "enabled" : "disabled"));
+            }
+            if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
+                System.out.println("Manual save triggered");
+                worldManager.saveModifiedChunks();
             }
         });
     }
@@ -199,19 +206,9 @@ public class Game {
 
         // Chunk generation rate limiting
         float chunkGenTimer = 0;
-        final float CHUNK_GEN_INTERVAL = 0.1f; // Generate chunks every 0.1 seconds
-        boolean firstFrame = true;
-        while (!window.shouldClose()) {
-            if (firstFrame) {
-                firstFrame = false;
-                Vector3f spawn = worldManager.getSpawnPoint();
-                int chunkX = (int)Math.floor(spawn.x / 16);
-                int chunkZ = (int)Math.floor(spawn.z / 16);
+        final float CHUNK_GEN_INTERVAL = 0.1f;
 
-                // Force this chunk to be priority
-                modifiedChunks.add(chunkX + "_" + chunkZ);
-                System.out.println("Forcing priority build of chunk " + chunkX + "_" + chunkZ);
-            }
+        while (!window.shouldClose()) {
             float currentTime = (float) glfwGetTime();
             float deltaTime = currentTime - lastTime;
             lastTime = currentTime;
@@ -220,6 +217,14 @@ public class Game {
 
             // Update FPS counter
             updateFPSCounter(deltaTime);
+
+            // Auto-save timer
+            saveTimer += deltaTime;
+            if (saveTimer >= SAVE_INTERVAL) {
+                System.out.println("Auto-saving...");
+                worldManager.saveModifiedChunks();
+                saveTimer = 0;
+            }
 
             // --- Get input ---
             InputState input = getInputState();
@@ -248,13 +253,31 @@ public class Game {
                 worldManager.breakBlock(hoveredCube);
             }
 
-            // --- Update shadows (less frequently) ---
+            // --- Handle block placing (right click) ---
+            if (hoveredCube != null && glfwGetMouseButton(window.getHandle(), GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+                // Calculate position to place block (adjacent to hovered cube)
+                Vector3f placePos = calculatePlacePosition(hoveredCube, player.getCamera().getFront());
+                if (placePos != null && !worldManager.hasCube((int)placePos.x, (int)placePos.y, (int)placePos.z)) {
+                    int chunkX = (int)Math.floor(placePos.x / 16);
+                    int chunkZ = (int)Math.floor(placePos.z / 16);
+                    String chunkKey = chunkX + "_" + chunkZ;
+
+                    if (!modifiedChunks.contains(chunkKey)) {
+                        modifiedChunks.add(chunkKey);
+                    }
+
+                    // Place a stone block (you can make this selectable)
+                    worldManager.placeBlock(placePos, new world.blocks.StoneBlock());
+                }
+            }
+
+            // --- Update shadows ---
             shadowUpdateCounter++;
-            if (shadowsEnabled && shadowUpdateCounter % 10 == 0) { // Every 10 frames
+            if (shadowsEnabled && shadowUpdateCounter % 10 == 0) {
                 shadowManager.renderDepthMap();
             }
 
-            // --- Generate chunks (rate limited) ---
+            // --- Generate chunks ---
             chunkGenTimer += deltaTime;
             if (chunkGenTimer >= CHUNK_GEN_INTERVAL) {
                 worldManager.generateChunksAround(player.getCamera().getPosition());
@@ -275,6 +298,46 @@ public class Game {
             // Limit FPS to reduce CPU usage
             limitFPS(deltaTime, 60);
         }
+    }
+
+    // Helper method for block placing
+    private Vector3f calculatePlacePosition(Vector3f hoveredCube, Vector3f lookDirection) {
+        // Find which face we're looking at
+        Vector3f blockCenter = new Vector3f(
+                hoveredCube.x + 0.5f,
+                hoveredCube.y + 0.5f,
+                hoveredCube.z + 0.5f
+        );
+
+        Vector3f toPlayer = new Vector3f(player.getCamera().getPosition()).sub(blockCenter);
+
+        // Determine which face is most aligned with the look direction
+        float maxDot = -1;
+        Vector3f placeOffset = new Vector3f();
+
+        Vector3f[] faceNormals = {
+                new Vector3f(1, 0, 0),   // Right
+                new Vector3f(-1, 0, 0),  // Left
+                new Vector3f(0, 1, 0),   // Top
+                new Vector3f(0, -1, 0),  // Bottom
+                new Vector3f(0, 0, 1),   // Front
+                new Vector3f(0, 0, -1)   // Back
+        };
+
+        for (Vector3f normal : faceNormals) {
+            float dot = lookDirection.dot(normal);
+            if (dot > maxDot) {
+                maxDot = dot;
+                placeOffset.set(normal);
+            }
+        }
+
+        // Place block in adjacent position
+        return new Vector3f(
+                hoveredCube.x + placeOffset.x,
+                hoveredCube.y + placeOffset.y,
+                hoveredCube.z + placeOffset.z
+        );
     }
 
     private void limitFPS(float deltaTime, int targetFPS) {
@@ -307,6 +370,11 @@ public class Game {
 
     // --- Cleanup ---
     private void cleanup() {
+        if (saveOnExit) {
+            System.out.println("Saving world before exit...");
+            worldManager.saveModifiedChunks();
+        }
+
         renderManager.cleanup();
         highlightManager.cleanup();
         raycastManager.cleanup();
@@ -318,7 +386,7 @@ public class Game {
             shadowManager.cleanup();
         }
 
-        worldManager.cleanup();
+        worldManager.cleanup(); // This also saves
         window.cleanup();
     }
 
